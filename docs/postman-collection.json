@@ -1,0 +1,1122 @@
+{
+  "info": {
+    "name": "NestJS GraphQL API Tests",
+    "description": "Collection completa de tests para la API GraphQL de NestJS con autenticación JWT y gestión de usuarios/proyectos",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001/graphql",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "project_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_to_delete_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "regular_user_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "Register New User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation RegisterUser($input: CreateUserInput!) {\\n  register(createUserInput: $input) {\\n    accessToken\\n    user {\\n      id\\n      email\\n      firstName\\n      lastName\\n      fullName\\n      role\\n      isActive\\n      createdAt\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"email\": \"test@example.com\",\n      \"firstName\": \"Test\",\n      \"lastName\": \"User\",\n      \"password\": \"password123\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Registra un nuevo usuario en el sistema"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains access token', function () {",
+                  "    pm.expect(response.data.register.accessToken).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test('User data is correct', function () {",
+                  "    const user = response.data.register.user;",
+                  "    pm.expect(user.email).to.eql('test@example.com');",
+                  "    pm.expect(user.firstName).to.eql('Test');",
+                  "    pm.expect(user.lastName).to.eql('User');",
+                  "    pm.expect(user.role).to.eql('USER');",
+                  "});",
+                  "",
+                  "// Guardar token para requests posteriores",
+                  "if (response.data.register.accessToken) {",
+                  "    pm.collectionVariables.set('jwt_token', response.data.register.accessToken);",
+                  "    pm.collectionVariables.set('user_id', response.data.register.user.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Admin User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation LoginUser($input: LoginInput!) {\\n  login(loginInput: $input) {\\n    accessToken\\n    user {\\n      id\\n      email\\n      firstName\\n      lastName\\n      fullName\\n      role\\n      isActive\\n      createdAt\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"email\": \"admin@example.com\",\n      \"password\": \"admin123\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Login con usuario administrador predefinido"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Login successful', function () {",
+                  "    pm.expect(response.data.login.accessToken).to.be.a('string');",
+                  "    pm.expect(response.data.login.user.role).to.eql('SUPERADMIN');",
+                  "});",
+                  "",
+                  "// Guardar token de admin",
+                  "if (response.data.login.accessToken) {",
+                  "    pm.collectionVariables.set('jwt_token', response.data.login.accessToken);",
+                  "    pm.collectionVariables.set('admin_token', response.data.login.accessToken);",
+                  "    pm.collectionVariables.set('user_id', response.data.login.user.id);",
+                  "    ",
+                  "    // Obtener lista de usuarios para testing de eliminación",
+                  "    setTimeout(() => {",
+                  "        pm.sendRequest({",
+                  "            url: pm.collectionVariables.get('base_url'),",
+                  "            method: 'POST',",
+                  "            header: {",
+                  "                'Content-Type': 'application/json',",
+                  "                'Authorization': `Bearer ${response.data.login.accessToken}`",
+                  "            },",
+                  "            body: {",
+                  "                mode: 'raw',",
+                  "                raw: JSON.stringify({",
+                  "                    query: `query GetAllUsers { users { id email role } }`",
+                  "                })",
+                  "            }",
+                  "        }, (err, res) => {",
+                  "            if (!err && res.json().data.users) {",
+                  "                const users = res.json().data.users;",
+                  "                const currentAdminId = response.data.login.user.id;",
+                  "                const userToDelete = users.find(u => u.id !== currentAdminId && u.role === 'USER');",
+                  "                if (userToDelete) {",
+                  "                    pm.collectionVariables.set('user_to_delete_id', userToDelete.id);",
+                  "                    console.log(`📝 Set user to delete: ${userToDelete.email} (${userToDelete.id})`);",
+                  "                }",
+                  "            }",
+                  "        });",
+                  "    }, 1000);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Regular User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation LoginUser($input: LoginInput!) {\\n  login(loginInput: $input) {\\n    accessToken\\n    user {\\n      id\\n      email\\n      firstName\\n      lastName\\n      fullName\\n      role\\n      isActive\\n      createdAt\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"email\": \"user@example.com\",\n      \"password\": \"user123\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Login con usuario regular predefinido"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Regular user login successful', function () {",
+                  "    pm.expect(response.data.login.accessToken).to.be.a('string');",
+                  "    pm.expect(response.data.login.user.role).to.eql('USER');",
+                  "});",
+                  "",
+                  "// Guardar token de usuario regular",
+                  "if (response.data.login.accessToken) {",
+                  "    pm.collectionVariables.set('regular_user_token', response.data.login.accessToken);",
+                  "    console.log('🔑 Regular user token saved for authorization tests');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "👥 Users Management",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetAllUsers {\\n  users {\\n    id\\n    email\\n    firstName\\n    lastName\\n    fullName\\n    role\\n    isActive\\n    createdAt\\n    updatedAt\\n    projects {\\n      id\\n      name\\n      status\\n    }\\n  }\\n}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Obtiene lista de todos los usuarios (requiere autenticación)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Users array returned', function () {",
+                  "    pm.expect(response.data.users).to.be.an('array');",
+                  "    pm.expect(response.data.users.length).to.be.greaterThan(0);",
+                  "});",
+                  "",
+                  "pm.test('User structure is correct', function () {",
+                  "    const user = response.data.users[0];",
+                  "    pm.expect(user).to.have.property('id');",
+                  "    pm.expect(user).to.have.property('email');",
+                  "    pm.expect(user).to.have.property('firstName');",
+                  "    pm.expect(user).to.have.property('lastName');",
+                  "    pm.expect(user).to.have.property('role');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetMe {\\n  me {\\n    id\\n    email\\n    firstName\\n    lastName\\n    fullName\\n    role\\n    isActive\\n    createdAt\\n    projects {\\n      id\\n      name\\n      description\\n      status\\n      createdAt\\n    }\\n  }\\n}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Obtiene información del usuario autenticado"
+          },
+          "response": []
+        },
+        {
+          "name": "Create User for Deletion Test (Admin Only)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateUser($input: CreateUserInput!) {\\n  createUser(createUserInput: $input) {\\n    id\\n    email\\n    firstName\\n    lastName\\n    role\\n    isActive\\n    createdAt\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"email\": \"delete-test@example.com\",\n      \"firstName\": \"ToDelete\",\n      \"lastName\": \"User\",\n      \"password\": \"password123\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Crea un usuario específicamente para testing de eliminación"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User created for deletion test', function () {",
+                  "    if (response.data && response.data.createUser) {",
+                  "        pm.expect(response.data.createUser.id).to.be.a('string');",
+                  "        pm.expect(response.data.createUser.email).to.eql('delete-test@example.com');",
+                  "        pm.expect(response.data.createUser.role).to.eql('USER');",
+                  "        ",
+                  "        // Guardar ID para test de eliminación",
+                  "        pm.collectionVariables.set('user_to_delete_id', response.data.createUser.id);",
+                  "        console.log('👤 Test user created for deletion:', response.data.createUser.email);",
+                  "    } else if (response.errors && response.errors[0].message.includes('already exists')) {",
+                  "        console.log('⚠️ Test user already exists, using existing user for tests');",
+                  "        pm.test.skip('User already exists - this is acceptable for repeated test runs');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update User Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation UpdateUser($id: ID!, $input: UpdateUserInput!) {\\n  updateUser(id: $id, updateUserInput: $input) {\\n    id\\n    email\\n    firstName\\n    lastName\\n    fullName\\n    role\\n    isActive\\n    updatedAt\\n  }\\n}\",\n  \"variables\": {\n    \"id\": \"{{user_id}}\",\n    \"input\": {\n      \"firstName\": \"Updated\",\n      \"lastName\": \"Name\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Actualiza el perfil del usuario"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User updated successfully', function () {",
+                  "    pm.expect(response.data.updateUser.firstName).to.eql('Updated');",
+                  "    pm.expect(response.data.updateUser.lastName).to.eql('Name');",
+                  "    pm.expect(response.data.updateUser.updatedAt).to.be.a('string');",
+                  "});",
+                  "",
+                  "// Ejecutar automáticamente GET para verificar cambios",
+                  "setTimeout(() => {",
+                  "    pm.sendRequest({",
+                  "        url: pm.collectionVariables.get('base_url'),",
+                  "        method: 'POST',",
+                  "        header: {",
+                  "            'Content-Type': 'application/json',",
+                  "            'Authorization': `Bearer ${pm.collectionVariables.get('jwt_token')}`",
+                  "        },",
+                  "        body: {",
+                  "            mode: 'raw',",
+                  "            raw: JSON.stringify({",
+                  "                query: `query GetMe { me { id firstName lastName fullName updatedAt } }`",
+                  "            })",
+                  "        }",
+                  "    }, (err, res) => {",
+                  "        if (!err) {",
+                  "            const userData = res.json().data.me;",
+                  "            pm.test('Changes persisted correctly', () => {",
+                  "                pm.expect(userData.firstName).to.eql('Updated');",
+                  "                pm.expect(userData.lastName).to.eql('Name');",
+                  "            });",
+                  "            console.log('✅ User profile updated and verified:', userData.fullName);",
+                  "        }",
+                  "    });",
+                  "}, 1000);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete User (Admin Only)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation DeleteUser($id: ID!) {\\n  removeUser(id: $id)\\n}\",\n  \"variables\": {\n    \"id\": \"{{user_to_delete_id}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Elimina un usuario (solo superadmin puede hacerlo)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User deleted successfully', function () {",
+                  "    pm.expect(response.data.removeUser).to.be.true;",
+                  "});",
+                  "",
+                  "// Verificar que el usuario ya no existe",
+                  "setTimeout(() => {",
+                  "    pm.sendRequest({",
+                  "        url: pm.collectionVariables.get('base_url'),",
+                  "        method: 'POST',",
+                  "        header: {",
+                  "            'Content-Type': 'application/json',",
+                  "            'Authorization': `Bearer ${pm.collectionVariables.get('jwt_token')}`",
+                  "        },",
+                  "        body: {",
+                  "            mode: 'raw',",
+                  "            raw: JSON.stringify({",
+                  "                query: `query GetAllUsers { users { id email firstName lastName role isActive } }`",
+                  "            })",
+                  "        }",
+                  "    }, (err, res) => {",
+                  "        if (!err) {",
+                  "            const users = res.json().data.users;",
+                  "            const deletedUserId = pm.collectionVariables.get('user_to_delete_id');",
+                  "            const userExists = users.find(user => user.id === deletedUserId);",
+                  "            ",
+                  "            pm.test('User removed from database', () => {",
+                  "                pm.expect(userExists).to.be.undefined;",
+                  "            });",
+                  "            ",
+                  "            console.log(`✅ User ${deletedUserId} successfully deleted from database`);",
+                  "            console.log(`📊 Remaining users: ${users.length}`);",
+                  "        }",
+                  "    });",
+                  "}, 1000);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📁 Projects Management",
+      "item": [
+        {
+          "name": "Create Project",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateProject($input: CreateProjectInput!) {\\n  createProject(createProjectInput: $input) {\\n    id\\n    name\\n    description\\n    status\\n    ownerId\\n    createdAt\\n    owner {\\n      id\\n      firstName\\n      lastName\\n      email\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"name\": \"Proyecto de Prueba API\",\n      \"description\": \"Este es un proyecto creado desde Postman para testing\",\n      \"status\": \"active\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Crea un nuevo proyecto"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Project created successfully', function () {",
+                  "    pm.expect(response.data.createProject.id).to.be.a('string');",
+                  "    pm.expect(response.data.createProject.name).to.eql('Proyecto de Prueba API');",
+                  "    pm.expect(response.data.createProject.status).to.eql('active');",
+                  "});",
+                  "",
+                  "// Guardar ID del proyecto",
+                  "if (response.data.createProject.id) {",
+                  "    pm.collectionVariables.set('project_id', response.data.createProject.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get All Projects",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetAllProjects {\\n  projects {\\n    id\\n    name\\n    description\\n    status\\n    ownerId\\n    createdAt\\n    updatedAt\\n    owner {\\n      id\\n      firstName\\n      lastName\\n      email\\n      role\\n    }\\n  }\\n}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Obtiene lista de todos los proyectos"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Project by ID",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetProject($id: ID!) {\\n  project(id: $id) {\\n    id\\n    name\\n    description\\n    status\\n    ownerId\\n    createdAt\\n    updatedAt\\n    owner {\\n      id\\n      firstName\\n      lastName\\n      email\\n      role\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"id\": \"{{project_id}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Obtiene un proyecto específico por ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Project",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation UpdateProject($id: ID!, $input: UpdateProjectInput!) {\\n  updateProject(id: $id, updateProjectInput: $input) {\\n    id\\n    name\\n    description\\n    status\\n    ownerId\\n    updatedAt\\n    owner {\\n      firstName\\n      lastName\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"id\": \"{{project_id}}\",\n    \"input\": {\n      \"name\": \"Proyecto Actualizado desde API\",\n      \"description\": \"Descripción actualizada del proyecto\",\n      \"status\": \"completed\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Actualiza un proyecto existente"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Project updated successfully', function () {",
+                  "    pm.expect(response.data.updateProject.name).to.eql('Proyecto Actualizado desde API');",
+                  "    pm.expect(response.data.updateProject.description).to.eql('Descripción actualizada del proyecto');",
+                  "    pm.expect(response.data.updateProject.status).to.eql('completed');",
+                  "    pm.expect(response.data.updateProject.updatedAt).to.be.a('string');",
+                  "});",
+                  "",
+                  "// Verificar cambios con GET request",
+                  "setTimeout(() => {",
+                  "    pm.sendRequest({",
+                  "        url: pm.collectionVariables.get('base_url'),",
+                  "        method: 'POST',",
+                  "        header: {",
+                  "            'Content-Type': 'application/json',",
+                  "            'Authorization': `Bearer ${pm.collectionVariables.get('jwt_token')}`",
+                  "        },",
+                  "        body: {",
+                  "            mode: 'raw',",
+                  "            raw: JSON.stringify({",
+                  "                query: `query GetProject($id: ID!) { project(id: $id) { id name description status updatedAt } }`,",
+                  "                variables: { id: pm.collectionVariables.get('project_id') }",
+                  "            })",
+                  "        }",
+                  "    }, (err, res) => {",
+                  "        if (!err) {",
+                  "            const projectData = res.json().data.project;",
+                  "            pm.test('Project changes persisted correctly', () => {",
+                  "                pm.expect(projectData.name).to.eql('Proyecto Actualizado desde API');",
+                  "                pm.expect(projectData.description).to.eql('Descripción actualizada del proyecto');",
+                  "                pm.expect(projectData.status).to.eql('completed');",
+                  "            });",
+                  "            console.log('✅ Project updated and verified:', projectData.name);",
+                  "        }",
+                  "    });",
+                  "}, 1000);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Project",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation DeleteProject($id: ID!) {\\n  removeProject(id: $id)\\n}\",\n  \"variables\": {\n    \"id\": \"{{project_id}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Elimina un proyecto (solo el propietario o superadmin)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Project deleted successfully', function () {",
+                  "    pm.expect(response.data.removeProject).to.be.true;",
+                  "});",
+                  "",
+                  "// Verificar que el proyecto ya no existe",
+                  "setTimeout(() => {",
+                  "    pm.sendRequest({",
+                  "        url: pm.collectionVariables.get('base_url'),",
+                  "        method: 'POST',",
+                  "        header: {",
+                  "            'Content-Type': 'application/json',",
+                  "            'Authorization': `Bearer ${pm.collectionVariables.get('jwt_token')}`",
+                  "        },",
+                  "        body: {",
+                  "            mode: 'raw',",
+                  "            raw: JSON.stringify({",
+                  "                query: `query GetAllProjects { projects { id name description status ownerId } }`",
+                  "            })",
+                  "        }",
+                  "    }, (err, res) => {",
+                  "        if (!err) {",
+                  "            const projects = res.json().data.projects;",
+                  "            const deletedProjectId = pm.collectionVariables.get('project_id');",
+                  "            const projectExists = projects.find(project => project.id === deletedProjectId);",
+                  "            ",
+                  "            pm.test('Project removed from database', () => {",
+                  "                pm.expect(projectExists).to.be.undefined;",
+                  "            });",
+                  "            ",
+                  "            console.log(`✅ Project ${deletedProjectId} successfully deleted from database`);",
+                  "            console.log(`📊 Remaining projects: ${projects.length}`);",
+                  "        }",
+                  "    });",
+                  "}, 1000);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "🔒 Authorization Tests",
+      "item": [
+        {
+          "name": "Access Without Token (Should Fail)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetUsers {\\n  users {\\n    id\\n    email\\n  }\\n}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Intenta acceder a recursos protegidos sin token JWT"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Unauthorized access blocked', function () {",
+                  "    pm.expect(response.errors).to.be.an('array');",
+                  "    pm.expect(response.errors[0].message).to.include('Unauthorized');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid Token (Should Fail)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "invalid.jwt.token",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetUsers {\\n  users {\\n    id\\n    email\\n  }\\n}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Intenta acceder con token JWT inválido"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Invalid token rejected', function () {",
+                  "    pm.expect(response.errors).to.be.an('array');",
+                  "    pm.expect(response.errors[0].message).to.include('Unauthorized');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Regular User Delete User (Should Fail)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{regular_user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation DeleteUser($id: ID!) {\\n  removeUser(id: $id)\\n}\",\n  \"variables\": {\n    \"id\": \"{{user_to_delete_id}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Usuario regular intenta eliminar a otro usuario (debe fallar)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200 (GraphQL error)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Access denied for regular user', function () {",
+                  "    pm.expect(response.errors).to.be.an('array');",
+                  "    pm.expect(response.errors.length).to.be.greaterThan(0);",
+                  "    pm.expect(response.errors[0].message).to.include('Forbidden');",
+                  "});",
+                  "",
+                  "console.log('✅ Regular user correctly denied access to delete user');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Regular User Update Other User (Should Fail)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{regular_user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation UpdateUser($id: ID!, $input: UpdateUserInput!) {\\n  updateUser(id: $id, updateUserInput: $input) {\\n    id\\n    firstName\\n    lastName\\n  }\\n}\",\n  \"variables\": {\n    \"id\": \"{{user_to_delete_id}}\",\n    \"input\": {\n      \"firstName\": \"Hacked\",\n      \"lastName\": \"User\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Usuario regular intenta actualizar a otro usuario (debe fallar)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200 (GraphQL error)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Access denied for updating other user', function () {",
+                  "    pm.expect(response.errors).to.be.an('array');",
+                  "    pm.expect(response.errors.length).to.be.greaterThan(0);",
+                  "    const errorMessage = response.errors[0].message.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(msg => ",
+                  "        msg.includes('you can only update your own profile') || ",
+                  "        msg.includes('forbidden') || ",
+                  "        msg.includes('access denied')",
+                  "    );",
+                  "});",
+                  "",
+                  "console.log('✅ Regular user correctly denied access to update other user');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Regular User Delete Project of Another User (Should Fail)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{regular_user_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation DeleteProject($id: ID!) {\\n  removeProject(id: $id)\\n}\",\n  \"variables\": {\n    \"id\": \"{{project_id}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Usuario regular intenta eliminar proyecto de otro usuario (debe fallar)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test('Status code is 200 (GraphQL error)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Access denied for deleting other user project', function () {",
+                  "    pm.expect(response.errors).to.be.an('array');",
+                  "    pm.expect(response.errors.length).to.be.greaterThan(0);",
+                  "    const errorMessage = response.errors[0].message.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(msg => ",
+                  "        msg.includes('you can only delete your own projects') || ",
+                  "        msg.includes('forbidden') || ",
+                  "        msg.includes('access denied') ||",
+                  "        msg.includes('not found')",
+                  "    );",
+                  "});",
+                  "",
+                  "console.log('✅ Regular user correctly denied access to delete other user project');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
