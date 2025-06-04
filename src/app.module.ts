@@ -3,6 +3,7 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { join } from 'path';
 
 import { UsersModule } from './users/users.module';
@@ -14,6 +15,11 @@ import { Project } from './projects/project.entity';
 
 @Module({
   imports: [
+    // Config Module
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+
     // GraphQL Configuration
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
@@ -26,13 +32,33 @@ import { Project } from './projects/project.entity';
     }),
 
     // Database Configuration
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: 'database.sqlite',
-      entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // Solo para desarrollo
-      dropSchema: true, // Borra la base de datos en cada inicio
-      logging: true,
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const isProd = process.env.NODE_ENV === 'production';
+
+        if (isProd) {
+          return {
+            type: 'postgres',
+            url: configService.get('DATABASE_URL'),
+            entities: [__dirname + '/**/*.entity{.ts,.js}'],
+            synchronize: true,
+            ssl: {
+              rejectUnauthorized: false, // Necesario para algunas plataformas cloud
+            },
+            logging: true,
+          };
+        }
+
+        return {
+          type: 'sqlite',
+          database: 'database.sqlite',
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize: true, // Solo para desarrollo
+          dropSchema: true, // Borra la base de datos en cada inicio
+          logging: true,
+        };
+      },
     }),
 
     // JWT Global Configuration
