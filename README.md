@@ -71,7 +71,7 @@ cp .env.example .env
 npm run start:dev
 
 # Iniciar servidor de desarrollo en modo watch
-npm run start:dev --watch
+npm run start: dev --watch
 
 # ===== PRODUCCIÓN =====
 # Construir la aplicación para producción
