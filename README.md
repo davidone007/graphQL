@@ -1190,3 +1190,8 @@ npm run start:dev
 
 ---
 
+## Autores
+
+- [Davide Flamini](https://github.com/davidone007)
+- [Andrés Cabezas](https://github.com/andrescabezas26)
+- [Nicolas Cuellar](https://github.com/Nicolas-CM)
